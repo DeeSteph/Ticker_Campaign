@@ -41,6 +41,8 @@ var emailObjs = new List<EmailDto>();
 Console.WriteLine("Please enter event price to filter within the price range:");
 var filterPrice = Console.ReadLine();
 
+filterPrice = filterPrice == "" ? "0" : filterPrice;
+
 // 1. TASK
 foreach (var item in customers)
 {
@@ -56,15 +58,34 @@ foreach (var item in customers)
     }
     else
     {
-        if (eventDictionary.ContainsKey(item.City))
+        foreach (var ev in events)
         {
-            emailObjs = JsonSerializer.Deserialize<List<EmailDto>>(eventDictionary[item.City]);
-        }
-        else
-        {
-            foreach (var ev in events)
+
+            if (eventDictionary.ContainsKey(item.City == null ? "NoCity" : item.City.Trim() + ":" + ev.City.Trim()) || eventDictionary.ContainsKey(ev.City.Trim() + ":" + item.City == null ? "NoCity" : item.City.Trim()))
+            {
+                var emailData = JsonSerializer.Deserialize<EmailDto>(eventDictionary[item.City.Trim() + ":" + ev.City.Trim()]);
+                var price = 0;
+                if (priceDictionary.ContainsKey(ev.Name.Trim() + ":" + ev.City.Trim()))
+                {
+                    price = priceDictionary[ev.Name.Trim() + ":" + ev.City.Trim()];
+                }
+                else
+                {
+                    price = GetPrice(ev);
+                    priceDictionary.Add(ev.Name.Trim() + ":" + ev.City.Trim(), price);
+                }
+                emailData.Name = ev.Name;
+                emailObjs.Add(emailData);
+            }
+            else
             {
                 var result = AddToEmail(customer, ev, distanceDictionary: distanceDictionary, priceDictionary: priceDictionary);
+                if (result.Distance == -1)
+                {
+                    Console.Clear();
+                    Console.WriteLine("500: The system has encountered internal server error, please contact your administrator.");
+                    return;
+                }
                 var emailobj = new EmailDto
                 {
                     Name = ev.Name,
@@ -73,20 +94,23 @@ foreach (var item in customers)
                     Price = result.Price,
                 };
                 emailObjs.Add(emailobj);
+
+                if (!eventDictionary.ContainsKey(item.City == null ? "NoCity" : item.City + ":" + ev.City.Trim()) || !eventDictionary.ContainsKey(ev.City.Trim() + ":" + item.City == null ? "NoCity" : item.City.Trim()))
+                {
+                    eventDictionary.Add(item.City == null ? "NoCity" : item.City.Trim() + ":" + ev.City.Trim(), JsonSerializer.Serialize(emailobj));
+                }
             }
         }
+
     }
+
+
     
-    
-    if (!eventDictionary.ContainsKey(item.City == null ? "NoCity" : item.City))
-    {
-        eventDictionary.Add(item.City == null ? "NoCity" : item.City, JsonSerializer.Serialize(emailObjs));
-    }
-    if(Convert.ToInt32(filterPrice) == 0 && filterPrice != null)
+    if (Convert.ToInt32(filterPrice) == 0 && filterPrice.ToString() != "")
     {
         emailObjs = emailObjs.ToList().OrderBy(x => x.Distance).Take(5).ToList();
     }
-    else if(Convert.ToInt32(filterPrice) > 0 && filterPrice != null)
+    else if (Convert.ToInt32(filterPrice) > 0 && filterPrice.ToString() != "")
     {
         emailObjs = emailObjs.ToList().OrderBy(x => x.Distance).Where(i => i.Price <= Convert.ToInt32(filterPrice)).Take(5).ToList();
     }
@@ -117,20 +141,22 @@ static EmailDto AddToEmail(Customer c, Event e, Dictionary<string, int> distance
     if (distanceDictionary.ContainsKey(c.City.Trim() + ":" + e.City.Trim()))
     {
         distance = distanceDictionary[c.City.Trim() + ":" + e.City.Trim()];
-        price = GetDistance(c.City, e.City);
     }
     else
     {
         distance = GetDistance(c.City, e.City);
-        price = GetPrice(e);
         distanceDictionary.Add(c.City.Trim() + ":" + e.City.Trim(), distance);
-        priceDictionary.Add(c.City.Trim() + ":" + e.City.Trim(), price);
     }
-    
+    if (priceDictionary.ContainsKey(e.Name.Trim() + ":" + e.City.Trim()))
+    {
+        price = price = priceDictionary[e.Name.Trim() + ":" + e.City.Trim()];
+    }
+    else
+    {
+        price = GetPrice(e);
+        priceDictionary.Add(e.Name.Trim() + ":" + e.City.Trim(), price);
+    }
 
-    //Console.Out.WriteLine($"{c.Name}: {e.Name} in {e.City}"
-    //+ (distance > 0 ? $" ({distance} miles away)" : "")
-    //+ (price.HasValue ? $" for ${price}" : ""));
 
     return new EmailDto
     {
@@ -154,17 +180,25 @@ static int GetDistance(string fromCity, string toCity)
 static int AlphebiticalDistance(string s, string t)
 {
     var result = 0;
-    var i = 0;
-    for (i = 0; i < Math.Min(s.Length, t.Length); i++)
+    try
     {
-        // Console.Out.WriteLine($"loop 1 i={i} {s.Length} {t.Length}");
-        result += Math.Abs(s[i] - t[i]);
+        var i = 0;
+        for (i = 0; i < Math.Min(s.Trim().Length, t.Trim().Length); i++)
+        {
+            // Console.Out.WriteLine($"loop 1 i={i} {s.Length} {t.Length}");
+            result += Math.Abs(s.Trim()[i] - t.Trim()[i]);
+        }
+        for (; i < Math.Max(s.Trim().Length, t.Trim().Length); i++)
+        {
+            // Console.Out.WriteLine($"loop 2 i={i} {s.Length} {t.Length}");
+            result += s.Trim().Length > t.Trim().Length ? s.Trim()[i] : t.Trim()[i];
+        }
     }
-    for (; i < Math.Max(s.Length, t.Length); i++)
+    catch (Exception ex)
     {
-        // Console.Out.WriteLine($"loop 2 i={i} {s.Length} {t.Length}");
-        result += s.Length > t.Length ? s[i] : t[i];
+        result = -1;
     }
+
     return result;
 }
 
