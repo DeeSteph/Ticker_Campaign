@@ -34,9 +34,6 @@ var emailObjs = new List<EmailDto>();
 // then add to email.
 //var customer = new Customer { Name = "Mr. Fake", City = "New York" };
 
-//var query = from result in customer
-//            where result.Contains("New York")
-//            select result;
 
 Console.WriteLine("Please enter event price to filter within the price range:");
 var filterPrice = Console.ReadLine();
